@@ -12988,8 +12988,9 @@
   "eos_token": "<|endoftext|>",
   "errors": "replace",
   "model_max_length": 1000000000000000019884624838656,
-  "pad_token": null,
+  "pad_token": "<|endoftext|>",
   "processor_class": "WhisperProcessor",
   "tokenizer_class": "WhisperTokenizer",
+  "trust_remote_code": false,
   "unk_token": "<|endoftext|>"
 }
