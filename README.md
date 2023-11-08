@@ -129,7 +129,7 @@ Whisper `large-v3` has the same architecture as the previous large models except
 The Whisper `large-v3` model is trained on 1 million hours of weakly labeled audio and 4 million hours of pseudolabeled audio collected using Whisper `large-v2`. 
 The model was trained for 2.0 epochs over this mixture dataset.
 
-The `large-v3` model shows improved performance over a wide variety of languages, performs lower than 60% error rate on Common Voice 15 and Fleurs, shows 10% to 20% reduction of errors compared to Whisper `large-v2`.
+The `large-v3` model shows improved performance over a wide variety of languages, showing 10% to 20% reduction of errors compared to Whisper `large-v2`.
 
 
 **Disclaimer**: Content for this model card has partly been written by the Hugging Face team, and parts of it were 
