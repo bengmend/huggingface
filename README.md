@@ -172,10 +172,11 @@ pip install --upgrade pip
 pip install --upgrade git+https://github.com/huggingface/transformers.git accelerate datasets[audio]
 ```
 
-### Short-Form Transcription
-
 The model can be used with the [`pipeline`](https://huggingface.co/docs/transformers/main_classes/pipelines#transformers.AutomaticSpeechRecognitionPipeline)
-class to transcribe short-form audio files (< 30-seconds) as follows:
+class to transcribe audio files of arbitrary length. Transformers uses a chunked algorithm to transcribe 
+long-form audio files, which in-practice is 9x faster than the sequential algorithm proposed by OpenAI 
+(see Table 7 of the [Distil-Whisper paper](https://arxiv.org/abs/2311.00430)). The batch size should 
+be set based on the specifications of your device:
 
 ```python
 import torch
@@ -201,11 +202,14 @@ pipe = pipeline(
     tokenizer=processor.tokenizer,
     feature_extractor=processor.feature_extractor,
     max_new_tokens=128,
+    chunk_length_s=30,
+    batch_size=16,
+    return_timestamps=True,
     torch_dtype=torch_dtype,
     device=device,
 )
 
-dataset = load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
+dataset = load_dataset("distil-whisper/librispeech_long", "clean", split="validation")
 sample = dataset[0]["audio"]
 
 result = pipe(sample)
@@ -218,59 +222,43 @@ To transcribe a local audio file, simply pass the path to your audio file when y
 + result = pipe("audio.mp3")
 ```
 
-### Long-Form Transcription
-
-Through Transformers Whisper uses a chunked algorithm to transcribe long-form audio files (> 30-seconds). In practice, this chunked long-form algorithm 
-is 9x faster than the sequential algorithm proposed by OpenAI in the Whisper paper (see Table 7 of the [Distil-Whisper paper](https://arxiv.org/abs/2311.00430)).
-
-To enable chunking, pass the `chunk_length_s` parameter to the `pipeline`. To activate batching, pass the argument `batch_size`:
+Whisper predicts the language of the source audio automatically. If the source audio language is known *a-priori*, it 
+can be passed as an argument to the pipeline:
 
 ```python
-import torch
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
-from datasets import load_dataset
-
-
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
-torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-
-model_id = "openai/whisper-large-v3"
-
-model = AutoModelForSpeechSeq2Seq.from_pretrained(
-    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
-)
-model.to(device)
-
-processor = AutoProcessor.from_pretrained(model_id)
-
-pipe = pipeline(
-    "automatic-speech-recognition",
-    model=model,
-    tokenizer=processor.tokenizer,
-    feature_extractor=processor.feature_extractor,
-    max_new_tokens=128,
-    chunk_length_s=15,
-    batch_size=16,
-    torch_dtype=torch_dtype,
-    device=device,
-)
-
-dataset = load_dataset("distil-whisper/librispeech_long", "clean", split="validation")
-sample = dataset[0]["audio"]
-
-result = pipe(sample)
-print(result["text"])
+result = pipe(sample, generate_kwargs={"language": "english"})
 ```
 
-<!---
-**Tip:** The pipeline can also be used to transcribe an audio file from a remote URL, for example:
+By default, Whisper performs the task of *speech transcription*, where the source audio language is the same as the target
+text language. To perform *speech translation*, where the target text is in English, set the task to `"translate"`:
 
 ```python
-result = pipe("https://huggingface.co/datasets/sanchit-gandhi/librispeech_long/resolve/main/audio.wav")
+result = pipe(sample, generate_kwargs={"task": "translate"})
 ```
---->
 
-### Speculative Decoding
+Finally, the model can be made to predict timestamps. For sentence-level timestamps, pass the `return_timestamps` argument:
+
+```python
+result = pipe(sample, return_timestamps=True)
+print(result["chunks"])
+```
+
+And for word-level timestamps:
+
+```python
+result = pipe(sample, return_timestamps="word")
+print(result["chunks"])
+```
+
+The above arguments can be used in isolation or in combination. For example, to perform the task of speech transcription 
+where the source audio is in French, and we want to return sentence-level timestamps, the following can be used:
+
+```python
+result = pipe(sample, return_timestamps=True, generate_kwargs={"language": "french", "task": "translate"})
+print(result["chunks"])
+```
+
+## Speculative Decoding
 
 Whisper `tiny` can be used as an assistant model to Whisper for speculative decoding. Speculative decoding mathematically
 ensures the exact same outputs as Whisper are obtained while being 2 times faster. This makes it the perfect drop-in 
