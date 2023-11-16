@@ -9,7 +9,7 @@
   "attention_dropout": 0.0,
   "begin_suppress_tokens": [
     220,
-    50256
+    50257
   ],
   "bos_token_id": 50257,
   "classifier_proj_size": 256,
