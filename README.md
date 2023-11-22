@@ -1,5 +1,5 @@
 ---
-language: 
+language:
 - en
 - zh
 - de
@@ -29,7 +29,7 @@ language:
 - da
 - hu
 - ta
-- no
+- 'no'
 - th
 - ur
 - hr
@@ -103,6 +103,7 @@ tags:
 - audio
 - automatic-speech-recognition
 - hf-asr-leaderboard
+- voice
 widget:
 - example_title: Librispeech sample 1
   src: https://cdn-media.huggingface.co/speech_samples/sample1.flac
