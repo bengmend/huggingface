@@ -154,7 +154,7 @@ checkpoints are summarised in the following table with links to the models on th
 | Size     | Parameters | English-only                                         | Multilingual                                        |
 |----------|------------|------------------------------------------------------|-----------------------------------------------------|
 | tiny     | 39 M       | [✓](https://huggingface.co/openai/whisper-tiny.en)   | [✓](https://huggingface.co/openai/whisper-tiny)     |
-| base     | 74 M       | [✓](https://huggingface.co/openai/whisper-base.en)   | [✓](https://huggingface.co/openai/whisper-base)     |
+| base     | 94M       | [✓](https://huggingface.co/openai/whisper-base.en)   | [✓](https://huggingface.co/openai/whisper-base)     |
 | small    | 244 M      | [✓](https://huggingface.co/openai/whisper-small.en)  | [✓](https://huggingface.co/openai/whisper-small)    |
 | medium   | 769 M      | [✓](https://huggingface.co/openai/whisper-medium.en) | [✓](https://huggingface.co/openai/whisper-medium)   |
 | large    | 1550 M     | x                                                    | [✓](https://huggingface.co/openai/whisper-large)    |
