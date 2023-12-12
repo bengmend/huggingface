@@ -271,7 +271,7 @@ To do so, you first need to install [Flash Attention](https://github.com/Dao-AIL
 pip install flash-attn --no-build-isolation
 ```
 
-and then all you have to do is to pass `use_flash_attention_2=True` to `from_pretrained`:
+and then all you have to do is to pass `attn_implementation="flash_attention_2"` to `from_pretrained`:
 
 ```diff
 - model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True)
