@@ -165,10 +165,11 @@
     "<|yue|>": 50358,
     "<|zh|>": 50260
   },
-  "max_initial_timestamp_index": 1,
+  "max_initial_timestamp_index": 50,
   "max_length": 448,
   "no_timestamps_token_id": 50364,
   "pad_token_id": 50257,
+  "prev_sot_token_id": 50362,
   "return_timestamps": false,
   "suppress_tokens": [
     1,
