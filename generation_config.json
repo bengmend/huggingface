@@ -51,15 +51,11 @@
   "forced_decoder_ids": [
     [
       1,
-      50259
+      null
     ],
     [
       2,
-      50360
-    ],
-    [
-      3,
-      50364
+      50359
     ]
   ],
   "is_multilingual": true,
