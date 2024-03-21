@@ -1,5 +1,5 @@
 ---
-language: 
+language:
 - en
 - zh
 - de
@@ -29,7 +29,7 @@ language:
 - da
 - hu
 - ta
-- no
+- 'no'
 - th
 - ur
 - hr
@@ -108,7 +108,7 @@ widget:
   src: https://cdn-media.huggingface.co/speech_samples/sample1.flac
 - example_title: Librispeech sample 2
   src: https://cdn-media.huggingface.co/speech_samples/sample2.flac
-pipeline_tag: automatic-speech-recognition
+pipeline_tag: text-to-audio
 license: apache-2.0
 ---
 
