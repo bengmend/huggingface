@@ -1,5 +1,5 @@
 ---
-language: 
+language:
 - en
 - zh
 - de
@@ -29,7 +29,7 @@ language:
 - da
 - hu
 - ta
-- no
+- 'no'
 - th
 - ur
 - hr
@@ -110,6 +110,14 @@ widget:
   src: https://cdn-media.huggingface.co/speech_samples/sample2.flac
 pipeline_tag: automatic-speech-recognition
 license: apache-2.0
+datasets:
+- HuggingFaceFW/fineweb
+- xzuyn/HuggingFaceFW_fineweb_CC-MAIN-2024-10_000_00000
+- PleIAs/YouTube-Commons
+- HuggingFaceM4/the_cauldron
+metrics:
+- accuracy
+library_name: fasttext
 ---
 
 # Whisper
