@@ -163,7 +163,7 @@ checkpoints are summarised in the following table with links to the models on th
 
 ## Usage
 
-Whisper `large-v3` is supported in Hugging Face 🤗 Transformers through the `main` branch in the Transformers repo. To run the model, first 
+Whisper `large-v3` is supported in Hugging Face 🤗 Transformers. To run the model, first 
 install the Transformers library through the GitHub repo. For this example, we'll also install 🤗 Datasets to load toy 
 audio dataset from the Hugging Face Hub:
 
@@ -172,11 +172,10 @@ pip install --upgrade pip
 pip install --upgrade git+https://github.com/huggingface/transformers.git accelerate datasets[audio]
 ```
 
+### Short-Form Transcription
+
 The model can be used with the [`pipeline`](https://huggingface.co/docs/transformers/main_classes/pipelines#transformers.AutomaticSpeechRecognitionPipeline)
-class to transcribe audio files of arbitrary length. Transformers uses a chunked algorithm to transcribe 
-long-form audio files, which in-practice is 9x faster than the sequential algorithm proposed by OpenAI 
-(see Table 7 of the [Distil-Whisper paper](https://arxiv.org/abs/2311.00430)). The batch size should 
-be set based on the specifications of your device:
+class to transcribe short-form audio files (< 30-seconds) as follows:
 
 ```python
 import torch
@@ -258,41 +257,259 @@ result = pipe(sample, return_timestamps=True, generate_kwargs={"language": "fren
 print(result["chunks"])
 ```
 
-## Additional Speed & Memory Improvements
+<details>
 
-You can apply additional speed and memory improvements to Whisper-large-v3 which we cover in the following.
+<summary> For more control over the generation parameters, use the model + processor API directly: </summary>
 
-### Flash Attention
+Ad-hoc generation arguments can be passed to `model.generate`, including `num_beams` for beam-search, `return_timestamps` 
+for segment-level timestamps, and `prompt_ids` for prompting. See the [docstrings](https://huggingface.co/docs/transformers/en/model_doc/whisper#transformers.WhisperForConditionalGeneration.generate)
+for more details.
 
-We recommend using [Flash-Attention 2](https://huggingface.co/docs/transformers/main/en/perf_infer_gpu_one#flashattention-2) if your GPU allows for it.
-To do so, you first need to install [Flash Attention](https://github.com/Dao-AILab/flash-attention):
+```python
+import torch
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+from datasets import Audio, load_dataset
+
+
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+model_id = "openai/whisper-large-v3"
+
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+)
+model.to(device)
+
+processor = AutoProcessor.from_pretrained(model_id)
+
+dataset = load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
+dataset = dataset.cast_column("audio", Audio(processor.feature_extractor.sampling_rate))
+sample = dataset[0]["audio"]
+
+input_features = processor(
+  sample["array"], sampling_rate=sample["sampling_rate"], return_tensors="pt"
+).input_features
+
+input_features = input_features.to(device, dtype=torch_dtype)
+
+gen_kwargs = {
+  "max_new_tokens": 128,
+  "num_beams": 1,
+  "return_timestamps": False,
+}
+
+pred_ids = model.generate(input_features, **gen_kwargs)
+pred_text = processor.batch_decode(pred_ids, skip_special_tokens=True, decode_with_timestamps=gen_kwargs["return_timestamps"])
+
+print(pred_text)
+```
+
+</details>
+
+### Sequential Long-Form
+
+This algorithm uses a sliding window for buffered inference of long audio files (> 30-seconds),
+and returns more accurate transcriptions compared to the [chunked long-form algorithm](#chunked-long-form).
+
+The sequential long-form algorithm should be used in either of the following scenarios:
+1. Transcription accuracy is the most important factor, and latency is less of a consideration
+2. You are transcribing **batches** of long audio files, in which case the latency of sequential is comparable to chunked, while being up to 0.5% WER more accurate
+
+The [`pipeline`](https://huggingface.co/docs/transformers/main_classes/pipelines#transformers.AutomaticSpeechRecognitionPipeline) 
+class can be used to transcribe long audio files with the sequential algorithm as follows: 
+
+```python
+import torch
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+from datasets import load_dataset
+
+
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+model_id = "openai/whisper-large-v3"
+
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+)
+model.to(device)
+
+processor = AutoProcessor.from_pretrained(model_id)
+
+pipe = pipeline(
+    "automatic-speech-recognition",
+    model=model,
+    tokenizer=processor.tokenizer,
+    feature_extractor=processor.feature_extractor,
+    max_new_tokens=128,
+    torch_dtype=torch_dtype,
+    device=device,
+)
+
+dataset = load_dataset("distil-whisper/librispeech_long", "clean", split="validation")
+sample = dataset[0]["audio"]
+
+result = pipe(sample)
+print(result["text"])
+```
+
+<details>
+
+<summary> For more control over the generation parameters, use the model + processor API directly: </summary>
+
+```python
+import torch
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+from datasets import Audio, load_dataset
+
+
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+model_id = "openai/whisper-large-v3"
+
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+)
+model.to(device)
+
+processor = AutoProcessor.from_pretrained(model_id)
+
+dataset = load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
+dataset = dataset.cast_column("audio", Audio(processor.feature_extractor.sampling_rate))
+sample = dataset[0]["audio"]
+
+inputs = processor(
+    sample["array"],
+    sampling_rate=sample["sampling_rate"],
+    return_tensors="pt",
+    truncation=False,
+    padding="longest",
+    return_attention_mask=True,
+)
+inputs = inputs.to(device, dtype=torch_dtype)
+
+gen_kwargs = {
+    "max_new_tokens": 448,
+    "num_beams": 1,
+    "condition_on_prev_tokens": False,
+    "compression_ratio_threshold": 1.35,  # zlib compression ratio threshold (in token space)
+    "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+    "logprob_threshold": -1.0,
+    "no_speech_threshold": 0.6,
+    "return_timestamps": True,
+}
+
+pred_ids = model.generate(**i   nputs, **gen_kwargs)
+pred_text = processor.batch_decode(pred_ids, skip_special_tokens=True, decode_with_timestamps=False)
+
+print(pred_text)
+```
+
+</details>
+
+### Chunked Long-Form
+
+large-v3 remains compatible with the Transformers chunked long-form algorithm. This algorithm should be used when 
+a single large audio file is being transcribed and the fastest possible inference is required. In such circumstances, 
+the chunked algorithm is up to 9x faster than OpenAI's sequential long-form implementation (see Table 7 of the 
+[Distil-Whisper paper](https://arxiv.org/pdf/2311.00430.pdf)).
+
+To enable chunking, pass the `chunk_length_s` parameter to the `pipeline`. For distil-large-v3, a chunk length of 25-seconds
+is optimal. To activate batching over long audio files, pass the argument `batch_size`:
+
+```python
+import torch
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+from datasets import load_dataset
+
+
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+model_id = "openai/whisper-large-v3"
+
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+)
+model.to(device)
+
+processor = AutoProcessor.from_pretrained(model_id)
+
+pipe = pipeline(
+    "automatic-speech-recognition",
+    model=model,
+    tokenizer=processor.tokenizer,
+    feature_extractor=processor.feature_extractor,
+    max_new_tokens=128,
+    chunk_length_s=25,
+    batch_size=16,
+    torch_dtype=torch_dtype,
+    device=device,
+)
+
+dataset = load_dataset("distil-whisper/librispeech_long", "clean", split="validation")
+sample = dataset[0]["audio"]
+
+result = pipe(sample)
+print(result["text"])
+```
+
+### Additional Speed & Memory Improvements
+
+You can apply additional speed and memory improvements to Distil-Whisper to further reduce the inference speed and VRAM 
+requirements. These optimisations primarily target the attention kernel, swapping it from an eager implementation to a 
+more efficient flash attention version.
+
+#### Flash Attention 2
+
+We recommend using [Flash-Attention 2](https://huggingface.co/docs/transformers/main/en/perf_infer_gpu_one#flashattention-2) 
+if your GPU allows for it. To do so, you first need to install [Flash Attention](https://github.com/Dao-AILab/flash-attention):
 
 ```
 pip install flash-attn --no-build-isolation
 ```
 
-and then all you have to do is to pass `use_flash_attention_2=True` to `from_pretrained`:
+Then pass `attn_implementation="flash_attention_2"` to `from_pretrained`:
 
 ```diff
 - model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True)
-+ model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True, use_flash_attention_2=True)
++ model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True, attn_implementation="flash_attention_2")
 ```
 
-### Torch Scale-Product-Attention (SDPA)
+#### Torch Scale-Product-Attention (SDPA)
 
-If your GPU does not support Flash Attention, we recommend making use of [BetterTransformers](https://huggingface.co/docs/transformers/main/en/perf_infer_gpu_one#bettertransformer).
-To do so, you first need to install optimum:
+If your GPU does not support Flash Attention, we recommend making use of PyTorch [scaled dot-product attention (SDPA)](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html). 
+This attention implementation is activated **by default** for PyTorch versions 2.1.1 or greater. To check 
+whether you have a compatible PyTorch version, run the following Python code snippet:
 
+```python
+from transformers.utils import is_torch_sdpa_available
+
+print(is_torch_sdpa_available())
 ```
-pip install --upgrade optimum
-```
 
-And then convert your model to a "BetterTransformer" model before using it:
+If the above returns `True`, you have a valid version of PyTorch installed and SDPA is activated by default. If it 
+returns `False`, you need to upgrade your PyTorch version according to the [official instructions](https://pytorch.org/get-started/locally/)
+
+Once a valid PyTorch version is installed, SDPA is activated by default. It can also be set explicitly by specifying 
+`attn_implementation="sdpa"` as follows:
 
 ```diff
-model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True)
-+ model = model.to_bettertransformer()
+- model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True)
++ model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True, attn_implementation="sdpa")
 ```
+
+For more information about how to use the SDPA refer to the [Transformers SDPA documentation](https://huggingface.co/docs/transformers/en/perf_infer_gpu_one#pytorch-scaled-dot-product-attention).
+
+#### Torch compile
+
+Coming soon...
+
+#### 4-bit and 8-bit Inference
+
+Coming soon...
 
 ## Fine-Tuning
 
