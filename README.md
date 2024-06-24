@@ -1,5 +1,5 @@
 ---
-language: 
+language:
 - en
 - zh
 - de
@@ -10,7 +10,6 @@ language:
 - ja
 - pt
 - tr
-- pl
 - ca
 - nl
 - ar
@@ -29,7 +28,7 @@ language:
 - da
 - hu
 - ta
-- no
+- 'no'
 - th
 - ur
 - hr
